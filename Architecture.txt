@@ -1,0 +1,82 @@
+**Mnemonic Hunter Architecture v2.0**
+
+Purpose: a live crypto seed phrase scanner + auto-sweeper that generates real BIP39 mnemonics (or accepts bulk manual input), derives addresses via BIP44 across 8 chains, checks live mainnet balances including ERC-20/TRC-20 tokens, and optionally auto-sweeps found funds to a configured destination wallet. Telegram notifications, license key gating, and affiliate split support are built in.
+
+**High-Level Components**
+- **TUI (Rich Live):** Full-screen terminal UI. Supports auto-generate mode (random BIP39) and bulk seed input mode (paste/load seeds manually). Controls for chain toggles, export, sweep toggle, mode switch.
+- **API Gateway:** FastAPI REST gateway for scan jobs, events, and license verification.
+- **Scan Engine:** Pipelines mnemonics through derivation → balance check → token scan → event emission.
+- **Mempool Monitor:** Live API-based mempool polling per chain (BTC via blockstream, ETH via etherscan, SOL via solana RPC).
+- **Funding Detector:** Watches specific addresses for incoming transactions across chains.
+- **Auto Sweep Bot:** Multi-chain withdraw bot with gas price optimization, configurable min balance threshold, destination wallet, and affiliate split.
+- **Telegram Notifier:** Sends real-time Telegram alerts on FOUND events.
+- **License Validator:** Telegram-based license key verification for gating export/features.
+- **Event Bus:** Pub/sub for FOUND, SCAN_STARTED, SCAN_STOPPED, WITHDRAWAL_PROPOSAL, SWEEP_EXECUTED events.
+- **Webhook Recorder:** Writes event payloads to events/ directory + Telegram.
+- **Config Manager:** JSON-based config for Telegram tokens, destination wallets, sweep thresholds, affiliate split, etc.
+
+**Interfaces & DI Points**
+- INodeClient, IKeyStore, ITransactionSigner, IWebhookClient, ILicenseVerifier, ISolver
+
+**Supporting Tokens**
+- USDT (ERC-20 on Ethereum via etherscan tokenbalance API)
+- USDT (TRC-20 on TRON via trongrid API)
+- Configurable via config.json scan.check_erc20_tokens / scan.check_trc20_tokens
+
+**Supported Chains (8)**
+| Chain | API | Derivation (bip-utils) |
+|---|---|---|
+| BTC | blockstream.info | Bip44Coins.BITCOIN |
+| ETH | etherscan.io | Bip44Coins.ETHEREUM |
+| LTC | blockcypher.com | Bip44Coins.LITECOIN |
+| SOL | solana RPC | Bip44Coins.SOLANA |
+| BNB | bscscan.com | Bip44Coins.BINANCE_CHAIN |
+| XRP | xrpscan.com | Bip44Coins.RIPPLE |
+| TRON | trongrid.io | Bip44Coins.TRON |
+| POLYGON | polygonscan.com | Bip44Coins.POLYGON |
+
+**File Structure**
+```
+app/
+├── api/                  FastAPI gateway
+├── components/
+│   ├── event_bus.py
+│   ├── scan_engine.py
+│   ├── license_service.py
+│   ├── mempool_monitor.py
+│   ├── funding_detector.py
+│   ├── bitcoin_auto_withdraw_bot.py (AutoSweepBot)
+│   └── config_manager.py
+├── implementations/
+│   ├── bip39_solver.py
+│   ├── live_node_client.py
+│   ├── bip39_key_store.py
+│   ├── transaction_signer.py
+│   ├── license_verifier.py
+│   ├── recording_webhook_client.py
+│   ├── telegram_notifier.py
+│   └── license_validator.py
+├── interfaces/
+├── storage/
+└── tui/
+    ├── app.py
+    ├── seed_input.py
+    └── export_handler.py
+config.json               Settings (Telegram, sweep, license, affiliate)
+events/                   Webhook JSON recordings
+fixtures/                 Test fixtures
+tests/                    Test modules
+exports/                  Exported found wallets
+seeds.txt                 Bulk seed phrase input file
+```
+
+**Controls (TUI)**
+| Key | Action |
+|---|---|
+| Space | Start/Stop scanning |
+| 1-8 | Toggle BTC/ETH/LTC/SOL/BNB/XRP/TRON/POLYGON |
+| M | Toggle auto-generate / manual seed input |
+| S | Toggle auto-sweep on/off |
+| E | Export found wallets to exports/ |
+| L | Load seeds from seeds.txt |
+| Q | Quit |

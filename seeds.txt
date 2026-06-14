@@ -1,0 +1,5 @@
+# Seed phrases (BIP39, 12+ words) — one per line
+# The scanner will load and check these on mainnet
+#
+# Example:
+# abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about

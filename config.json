@@ -1,0 +1,61 @@
+{
+    "telegram": {
+        "bot_token": "",
+        "chat_id": "",
+        "enabled": false
+    },
+    "sweep": {
+        "destination_wallet": {
+            "BTC": "",
+            "ETH": "",
+            "LTC": "",
+            "SOL": "",
+            "BNB": "",
+            "XRP": "",
+            "TRON": "",
+            "POLYGON": ""
+        },
+        "min_balance_usd": 10.0,
+        "auto_broadcast": false,
+        "priority_fee_multiplier": 1.5,
+        "check_interval": 30
+    },
+    "api_keys": {
+        "etherscan": "",
+        "bscscan": "",
+        "polygonscan": "",
+        "coingecko": ""
+    },
+    "license": {
+        "secret_key": "",
+        "telegram_bot_token": "",
+        "enabled": false
+    },
+    "affiliate": {
+        "enabled": false,
+        "dev_split": 0.6,
+        "affiliate_split": 0.4,
+        "dev_wallet": "",
+        "affiliate_wallet": ""
+    },
+    "scan": {
+        "check_erc20_tokens": true,
+        "check_trc20_tokens": true,
+        "mempool_poll_interval": 30,
+        "balance_cache_ttl": 30,
+        "token_contracts": {
+            "ETH": ["USDT", "USDC", "DAI", "WBTC"],
+            "BNB": ["USDT", "USDC", "BUSD"],
+            "POLYGON": ["USDT", "USDC", "DAI"],
+            "TRON": ["USDT", "USDC", "USDD"]
+        }
+    },
+    "api": {
+        "auto_start_server": false,
+        "host": "127.0.0.1",
+        "port": 8000
+    },
+    "webhook": {
+        "target_url": ""
+    }
+}

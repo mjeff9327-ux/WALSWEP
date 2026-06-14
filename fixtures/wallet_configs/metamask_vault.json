@@ -1,0 +1,12 @@
+{
+    "wallet": "MetaMask",
+    "type": "software",
+    "description": "MetaMask wallet configuration for key derivation",
+    "derivation": {
+        "bip44_coin_type": 60,
+        "bip44_path": "m/44'/60'/0'/0/0",
+        "encryption": "AES-128-CBC with PBKDF2",
+        "key_storage": "browser localStorage (encrypted vault)"
+    },
+    "supported_chains": ["ETH", "BNB", "POLYGON"]
+}

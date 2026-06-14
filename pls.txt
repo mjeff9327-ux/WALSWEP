@@ -1,0 +1,235 @@
+
+
+
+A script auto-sweeper (or sweeper bot) is usually the post-compromise extraction layer. It assumes the attacker already has direct control of the wallet via the seed phrase or private key, then continuously watches for incoming funds and automatically transfers them out, often within seconds. It is explicitly describes sweepers as automated scripts that monitor transactions and move assets from a compromised account to an attacker-controlled address. Source
+
+
+A sweeper is more like an automated cleanup bot that sits on a stolen key and drains anything that appears later. sweepers rely on persistent control and speed. Source Source Source
+
+
+while also running sweepers on wallets for which they have already obtained seed phrases or private keys.
+
+
+
+================
+
+An automated draining or sweeping script is a specialized program designed to automatically detect and transfer digital assets (like cryptocurrencies or NFTs) out of a targeted blockchain wallet to another destination address as soon as they become available.
+
+While the underlying technology is identical, the intent and context define whether it is a legitimate tool (Sweeper)
+
+------------------------------
+
+## ??? The Legitimate Use: Blockchain Sweepers
+
+In legitimate blockchain engineering, these scripts are security and optimization tools used by wallet owners, security researchers, or decentralized applications.
+
+
+* Asset Recovery: If a user accidentally leaks their private key or mnemonic phrase, malicious bots will instantly steal any native crypto (like ETH or MATIC) deposited to pay for gas fees. A defensive sweeping script can bypass these bots using advanced transaction routing (like Flashbots or private mempools) to safely extract stuck tokens or NFTs to a secure wallet.
+
+* Gas-Less Migrations: Sweepers are used by institutional custodians to consolidate funds from thousands of deposit addresses into a single secure cold storage wallet automatically.
+
+* Smart Contract Automation: Developers use scripts to sweep accrued fees or protocol rewards into governance treasuries on a fixed schedule.
+
+
+------------------------------
+
+
+## ?? Common Technical Characteristics
+
+
+| Feature | How It Works |
+
+|---|---|
+
+| Mem-pool Monitoring | The script constantly listens to the blockchain network's memory pool (mempool) to detect pending transactions or inbound fund movements. |
+
+| Gas Fee Prioritization | competitive sweepers use exceptionally high priority gas fees to ensure their asset-transfer transaction is processed before any counter-actions can be taken. |
+
+| Multi-Asset Execution | Advanced scripts do not just look for native coins (like Ethereum); they dynamically query balance registries for high-value ERC-20 tokens, stablecoins (USDC, USDT), and popular NFT collections. |
+
+
+------------------------------
+
+
+Here is exactly how these scripts operate under the hood:
+
+
+------------------------------
+
+## 2. Recovery Context (Sweeper Bots)
+
+In a defensive scenario, the script already possesses the wallet's private key or recovery phrase.
+
+
+* The Leak: A user's private key or recovery phrase is accidentally exposed online or compromised by malware.
+
+* The Setup: Malicious bots instantly log into that wallet. The moment the original owner tries to deposit native coins (like Ethereum) to pay the network "gas fee" to rescue their stuck tokens, the bot detects the incoming deposit.
+
+* The Race: The script automatically signs a transaction using the compromised private key and sends the tokens away in a fraction of a second, beating the human owner who is trying to do it manually.
+
+
+System Scanning: The script can perform a recursive search of your computer’s hard drive for sensitive files, such as text files containing passwords, private keys, seed phrases, or saved documents with financial information.
+
+
+================
+
+
+ 1. **Smart Contract Enforcement:** 
+
+When a victim signs a malicious transaction, they are interacting with a smart contract *controlled by the developer*. This contract is programmed to handle the incoming assets.
+
+ 2. **The "Split" Function:** As soon as the victim's assets (ETH, tokens, web3 or airdrop) are transferred into the system, the smart contract immediately executes a logic function. It identifies the "affiliate ID" associated calculates the split.
+
+   * **60%** (or the agreed commission) is programmatically sent to the developer's pre-defined "vault" wallet.
+
+   * **40%** is sent to the affiliate's wallet.
+
+ 3. **No Manual Payouts:** This all happens in a single transaction or a rapid series of automated calls. By the time the victim sees their balance drop, the funds have already been divided and distributed to different wallets.
+
+### Why the Developers Design it this Way
+
+ * **Guaranteed Payment:** The developer does not have to chase affiliates for money. They get paid the second a theft occurs.
+
+ * **Scalability:** 
+
+The developer can manage thousands of affiliates without ever having to manually process a single payment or check an invoice.
+
+ * **The "Dashboard" Illusion:** The affiliate logs into a "dashboard" provided by the developer. This dashboard shows them the "total stolen" and "their 30% share." It creates the illusion that the affiliate is the "boss," while in reality, the developer controls the entire infrastructure and the keys to the kingdom.
+
+### A Key Research Point
+
+If you are analyzing these scripts, look for the **hardcoded wallet addresses** or **logic loops** in the smart contract (or the backend node code). You will typically find:
+
+ * A variable representing the fee_percentage (e.g., 0.6 for 60%).
+
+ * A function like withdraw() or execute_transfer() that calculates the total_amount * fee_percentage for the developer and total_amount * (1 - fee_percentage) for the affiliate.
+
+===================
+
+ The webhook
+
+
+
+It rely heavily on webhooks—specifically the Telegram Bot API. In the context of your research, the webhook is the "nervous system" of the operation, allowing the automated script to "phone home" and report its status to the attacker.
+
+### Why Webhooks are Essential for These Scripts
+
+The developers of these scripts do not want to manually check a database to see if a wallet has been drained. They want to be alerted the exact microsecond a victim's assets are stolen.
+
+ * **Real-time Exfiltration:** As soon as the Python script or the malicious contract successfully transfers funds, it executes an HTTP POST request to a specific Telegram URL. This is effectively a "webhook" that pushes the stolen data—the wallet address, the value of the assets, and the transaction hash—directly to the attacker’s phone.
+
+ * **Decoupled Architecture:** The script doesn't need to be part of a large, complex server. It just needs to be able to make a simple web request to the Telegram API (api.telegram.org). This makes the code very light and easy to hide in GitHub repositories, fake tools, or phishing sites.
+
+ * **The "Affiliate" Alert:** In the "Drainer-as-a-Service" (DaaS) model, webhooks are how the developer informs the affiliate that they have just earned their 80% cut. The script sends the notification to the *affiliate's* specific Telegram chat ID, keeping them "hooked" on the service by providing instant gratification.
+
+### How to Identify This in Your Research
+
+When you are examining the code of these scripts, you are looking for the following indicators that confirm the use of a webhook:
+
+ 1. **The Endpoint Structure:** Look for strings formatted like https://api.telegram.org/bot<BOT_TOKEN>/sendMessage. This is the signature of a webhook notification.
+
+ 2. **Configuration Files:** You will often find files named config.json, settings.js, or .env. These files usually contain a TELEGRAM_TOKEN and a CHAT_ID. This is the "destination" where the stolen data is being sent.
+
+ 3. **Data Serialization:** Before sending the data, the script will bundle it into a JSON object (a structured text format). If you see the script taking variables like wallet_address, balance, and private_key and packing them into a JSON object before an http.post() call, that is the exfiltration of the data via webhook.
+
+ 4. **Silent Execution:** Because these webhook requests are standard, legitimate web traffic (using standard HTTPS port 443), they are very difficult to distinguish from normal internet activity, which helps the script remain undetected by basic firewalls or network monitors.
+
+==================
+
+
+Multi-Chain Support: The interface options (BTC, ETH, USDT, SOL, LTC, XRP, BNB) are intended to broaden the scope of the scam, allowing the attacker to target users across multiple blockchain ecosystems.
+
+ ===========
+
+
+wallet sweepers."
+
+Here is why this interface suggests such functionality:
+
+ * **Blockchain Selection:** The top section allows the user to toggle multiple major blockchains (BTC, BNB, ETH, LTC, XRP, SOL, USDT), which is typical for scripts designed to check and extract funds from a wide array of wallets simultaneously.
+
+ * **Seed Phrase Input:** The large text box on the left, which contains numerous lines of words, is designed for the mass entry of seed phrases (also known as recovery phrases). These are the 12-to-24-word sequences that grant full, permanent access to a cryptocurrency wallet.
+
+ * **Automated Searching:** The interface includes "SEARCH" and "STOP" buttons, indicating the software is designed to iterate through the list of provided seed phrases to check for balances across the selected blockchains.
+
+And  
+
+Automated Scanning: Once the seed phrases are entered, the script systematically checks each phrase against the selected blockchains to identify any wallets that contain assets.
+
+
+Unauthorized Transfer: If a balance is detected, the "sweeper" functionality is designed to immediately initiate a transaction to move those tokens or funds to a wallet controlled by the attacker.
+
+
+ "Attack Chaining": This is often a part of a larger, automated workflow where multiple tools—such as scanners, brute-force scripts, and bots—are chained together to quickly identify and drain compromised wallet addresses.
+
+==========
+
+
+ * **Asset Profiling & Validation:** 
+
+The "Found" count and the list of balances represent the output of an "Asset Profiling" or "Checker" stage. The tool validates the seed phrases to ensure they are functional keys, checks their current balances across multiple blockchains, and converts those balances into a readable currency format (like USD) to prioritize which wallets to drain first.
+
+ * **Real-Time Monitoring:** 
+
+Tools like this often feature dashboards that allow the attacker to see the status of their "harvest" in real time. The display of specific transaction values and currency types suggests the script is automating the "Security Assessment and Automated Transfer" phase, where the software identifies the most valuable tokens and executes the transfer.
+
+ * **Exporter/Log Functionality:** 
+
+The presence of an "EXPORT" button at the bottom indicates that the attacker can extract these successful results—likely a list of private keys or the specific addresses that have been "drained"—for further processing or to maintain a record of their thefts.
+
+=================
+
+License key mechanism 
+
+
+By requiring a "License Key" obtained via Telegram to access the "Export" functionality, the developers are implementing a gatekeeping mechanism
+
+
+ * **Affiliate/Subscription Model:** 
+
+By funneling users to Telegram for a license key, the developers can control who uses their tool, verify payments, and manage an affiliate system where users might pay for access or split the proceeds of any "drained" wallets.
+
+ * **Centralized Control:** 
+
+The "License Key" system allows the operators to remotely disable access to the software if they suspect a user is violating their terms or attempting to reverse-engineer the tool, essentially creating a "Software as a Service" (SaaS) model for illicit activities.
+
+ * **Anonymity & Recruitment:** 
+
+Directing users to Telegram allows the developers to maintain a degree of anonymity while actively recruiting new "affiliates" who will provide their own stolen data (seed phrases) to be processed by the tool's backend.
+
+====================
+
+
+BACKEND + SERVER
+
+auto-sweeper scripts almost certainly rely on a backend server infrastructure. While the interface is the "client" or "frontend" where you input the data, it is merely a bridge to a more powerful set of processes running in the background.
+
+
+### Why a Backend is Essential
+
+The software is not performing its heavy lifting locally on your machine for several key reasons:
+
+ * **Blockchain Interaction:** 
+
+To "check" if a seed phrase has funds, the script must query the blockchain. Doing this from a single home computer is slow, inefficient, and likely to be rate-limited by public blockchain nodes. A backend server uses dedicated nodes to scan thousands of addresses across multiple chains in milliseconds.
+
+ * **Data Exfiltration:** 
+
+When you enter a seed phrase, the script does not just check it locally; it almost certainly sends that phrase to a remote server controlled by the attacker. This ensures the attacker retains control over the "harvested" data, even if you delete the software from your computer.
+
+ * **Affiliate/Licensing Management:** the requirement for a "License Key" implies a centralized authentication system. When you enter a key, the software reaches out to the attacker's server to verify that your key is active and authorized to use the service.
+
+ * **Operational Security for the Attacker:** By keeping the core logic (the "sweeper" engine) on a server, the attacker can:
+
+   * Update the exploit logic without needing you to download a new version of the app.
+
+   * Monitor, in real-time, the data being fed into the system by all their "affiliates."
+
+   * Automatically trigger the transfer (draining) of funds as soon as a high-value wallet is detected.
+
+
+### The Anatomy of the Attack
+
+The "Export" button you noticed is likely the final command in the chain. When clicked, it instructs the server to package the validated, high-balance seed phrases—or the private keys derived from them—and send them to the attacker's "wallet collection" database.
+
+If you are researching this, you can think of the software interface as a **"feeder"** and the remote server as the **"harvester."** The feeder (what you see) gathers the raw material (seed phrases), and the harvester (the backend) processes them, drains the assets, and distributes the profits to the attacker's primary addresses.

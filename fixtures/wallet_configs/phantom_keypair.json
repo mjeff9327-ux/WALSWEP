@@ -1,0 +1,12 @@
+{
+    "wallet": "Phantom",
+    "type": "software",
+    "description": "Phantom wallet configuration for key derivation",
+    "derivation": {
+        "bip44_coin_type": 501,
+        "bip44_path": "m/44'/501'/0'/0'",
+        "encryption": "AES-256-GCM with Argon2id",
+        "key_storage": "browser localStorage (encrypted keypair)"
+    },
+    "supported_chains": ["SOL"]
+}

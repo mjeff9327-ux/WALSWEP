@@ -1,0 +1,12 @@
+{
+    "wallet": "Trust Wallet",
+    "type": "software",
+    "description": "Trust Wallet configuration for key derivation",
+    "derivation": {
+        "bip44_coin_type": 60,
+        "bip44_path": "m/44'/60'/0'/0/0",
+        "encryption": "AES-256-CBC",
+        "key_storage": "device storage with encrypted backup"
+    },
+    "supported_chains": ["ETH", "BNB"]
+}

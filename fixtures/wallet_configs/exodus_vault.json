@@ -1,0 +1,12 @@
+{
+    "wallet": "Exodus",
+    "type": "software",
+    "description": "Exodus wallet configuration for key derivation",
+    "derivation": {
+        "bip44_coin_type": 60,
+        "bip44_path": "m/44'/60'/0'/0/0",
+        "encryption": "ChaCha20-Poly1305",
+        "key_storage": "local state file (encrypted)"
+    },
+    "supported_chains": ["BTC", "ETH", "SOL", "XRP"]
+}
