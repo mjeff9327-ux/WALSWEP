@@ -8,6 +8,7 @@ from app.interfaces.key_store import IKeyStore, UnsignedTx
 from app.interfaces.transaction_signer import ITransactionSigner
 from app.components.event_bus import EventBus
 from app.components.config_manager import ConfigManager
+from app.implementations.transaction_signer import CHAIN_COINS
 
 logger = logging.getLogger(__name__)
 
@@ -122,15 +123,23 @@ class AutoSweepBot:
         auto_broadcast = self._config.get("sweep", "auto_broadcast", False)
         if auto_broadcast:
             self._signer.set_mnemonic(seed_label)
-            unsigned = UnsignedTx(to=dest, value=proposal.amount, token=chain, chain=chain)
-            signed = self._signer.sign(unsigned)
-            logger.info("Auto-sweep signed tx: %s on %s (gas: %d)", signed.tx_id, chain, fee_rate)
-            await self._event_bus.emit("SWEEP_EXECUTED", {
-                "tx_id": signed.tx_id,
-                "chain": chain,
-                "amount": proposal.amount,
-                "destination": dest,
-            })
+            unsigned = UnsignedTx(
+                to=dest, value=proposal.amount, token=chain, chain=chain,
+                from_address=address, seed_label=seed_label,
+            )
+            signed = await self._signer.sign(unsigned)
+            if signed.broadcast_error:
+                logger.warning("Signing failed for %s: %s", chain, signed.broadcast_error)
+            else:
+                txid = await self._signer.broadcast(signed)
+                logger.info("Auto-sweep tx %s on %s (gas: %d): %s", signed.tx_id, chain, fee_rate, txid)
+                await self._event_bus.emit("SWEEP_EXECUTED", {
+                    "tx_id": signed.tx_id,
+                    "chain": chain,
+                    "amount": proposal.amount,
+                    "destination": dest,
+                    "broadcast_result": txid,
+                })
         return proposal
 
     async def watch_pending_sweeps(self) -> None:
@@ -148,6 +157,13 @@ class AutoSweepBot:
         pending_task = asyncio.create_task(self.watch_pending_sweeps())
         try:
             while self._running:
+                for chain in CHAIN_COINS:
+                    dest = self._config.get_destination(chain)
+                    if not dest:
+                        continue
+                    balance = await self._node_client.query_balance(dest, chain)
+                    if balance.confirmed > 0 and balance.usd_value and balance.usd_value > 10:
+                        logger.info("Destination %s on %s has %.8f ($%.2f) waiting", dest, chain, balance.confirmed, balance.usd_value)
                 await asyncio.sleep(check_interval)
         finally:
             pending_task.cancel()

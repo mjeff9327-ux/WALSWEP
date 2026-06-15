@@ -16,6 +16,7 @@ from app.components.license_service import LicenseService
 from app.implementations.license_verifier import ProductionLicenseVerifier
 from app.tui.export_handler import ExportHandler
 from app.tui.wallet_panel import WalletSecurityPanel
+from app.tui.lab_panel import LabPanel
 from app.components.config_manager import ConfigManager
 
 CHAINS = ["BTC", "ETH", "LTC", "SOL", "BNB", "XRP", "TRON", "POLYGON"]
@@ -125,8 +126,13 @@ class ProdigyTextualUI(App):
         margin: 0 1;
     }
 
-    #test-btn {
+    #derive-btn {
         background: #885500;
+        color: white;
+    }
+
+    #lab-btn {
+        background: #335577;
         color: white;
     }
 
@@ -170,13 +176,14 @@ class ProdigyTextualUI(App):
     scanned = reactive(0)
     found_count = reactive(0)
 
-    def __init__(self, scan_engine: ScanEngine, event_bus: EventBus, config: ConfigManager, solver=None, wallet_tester=None):
+    def __init__(self, scan_engine: ScanEngine, event_bus: EventBus, config: ConfigManager, solver=None, wallet_operator=None, sweep_orchestrator=None):
         super().__init__()
         self._scan_engine = scan_engine
         self._event_bus = event_bus
         self._config = config
         self._solver = solver
-        self._wallet_tester = wallet_tester
+        self._wallet_operator = wallet_operator
+        self._sweep_orchestrator = sweep_orchestrator
         self._licenser = LicenseService(ProductionLicenseVerifier(
             secret_key=config.get("license", "secret_key", ""),
         ))
@@ -202,8 +209,10 @@ class ProdigyTextualUI(App):
             yield Button(" SEARCH ", id="search-btn", variant="default")
             yield Button(" STOP ", id="stop-btn", variant="default")
             yield Button(" EXPORT ", id="export-btn", variant="primary")
-            if self._wallet_tester:
-                yield Button(" TEST WALLET ", id="test-btn", variant="default")
+            if self._wallet_operator:
+                yield Button(" DERIVE ", id="derive-btn", variant="default")
+            if self._sweep_orchestrator:
+                yield Button(" SWEEP ", id="lab-btn", variant="default")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -260,9 +269,12 @@ class ProdigyTextualUI(App):
         elif btn_id == "stop-btn":
             if self._scanning:
                 self._stop_scan()
-        elif btn_id == "test-btn":
-            if self._wallet_tester:
-                self.push_screen(WalletSecurityPanel(tester=self._wallet_tester))
+        elif btn_id == "derive-btn":
+            if self._wallet_operator:
+                self.push_screen(WalletSecurityPanel(operator=self._wallet_operator))
+        elif btn_id == "lab-btn":
+            if self._sweep_orchestrator:
+                self.push_screen(LabPanel(operator=self._sweep_orchestrator))
         elif btn_id == "export-btn":
             if self._licensed and self._can("export"):
                 self._export()
@@ -348,29 +360,48 @@ class ProdigyTextualUI(App):
         self._scanning = False
 
 
-def run_textual_ui(scan_engine: ScanEngine, event_bus: EventBus, config: ConfigManager, solver=None, wallet_tester=None):
+def run_textual_ui(scan_engine: ScanEngine, event_bus: EventBus, config: ConfigManager, solver=None, wallet_operator=None, sweep_orchestrator=None):
     app = ProdigyTextualUI(
         scan_engine=scan_engine,
         event_bus=event_bus,
         config=config,
         solver=solver,
-        wallet_tester=wallet_tester,
+        wallet_operator=wallet_operator,
+        sweep_orchestrator=sweep_orchestrator,
     )
     app.run()
 
 
 if __name__ == "__main__":
     from app.implementations.bip39_solver import Bip39Solver
+    from app.implementations.bip39_key_store import Bip39KeyStore
+    from app.implementations.live_node_client import LiveNodeClient
+    from app.implementations.recording_webhook_client import WebhookClient
+    from app.implementations.transaction_signer import TransactionSigner
+    from app.components.token_scanner import TokenScanner
     _config = ConfigManager()
     _event_bus = EventBus()
     _solver = Bip39Solver()
+    _key_store = Bip39KeyStore()
+    _api_keys = {
+        "etherscan": _config.get("api_keys", "etherscan", ""),
+        "bscscan": _config.get("api_keys", "bscscan", ""),
+        "polygonscan": _config.get("api_keys", "polygonscan", ""),
+    }
+    _node_client = LiveNodeClient(api_keys=_api_keys, timeout=15.0)
+    _webhook_client = WebhookClient(
+        target_url=_config.get("webhook", "target_url", ""),
+        output_dir="events",
+    )
+    _token_scanner = TokenScanner(node_client=_node_client, config=_config)
     _scan_engine = ScanEngine(
         solver=_solver,
-        key_store=None,
-        node_client=None,
-        webhook_client=None,
+        key_store=_key_store,
+        node_client=_node_client,
+        webhook_client=_webhook_client,
         event_bus=_event_bus,
         config=_config,
+        token_scanner=_token_scanner,
         chains=["BTC", "ETH", "LTC", "SOL", "BNB", "XRP", "TRON", "POLYGON"],
     )
     run_textual_ui(_scan_engine, _event_bus, _config, _solver)

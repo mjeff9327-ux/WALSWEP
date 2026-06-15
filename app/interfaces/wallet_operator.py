@@ -4,8 +4,8 @@ from typing import Optional
 
 
 @dataclass
-class SecurityTestResult:
-    vector: str
+class OperationResult:
+    operation: str
     success: bool
     wallet_type: str
     chain: str
@@ -16,7 +16,7 @@ class SecurityTestResult:
     details: dict
 
 
-class IWalletSecurityTester(ABC):
+class IWalletOperator(ABC):
 
     @abstractmethod
     def name(self) -> str:
@@ -27,9 +27,9 @@ class IWalletSecurityTester(ABC):
         ...
 
     @abstractmethod
-    def available_vectors(self) -> list[str]:
+    def available_operations(self) -> list[str]:
         ...
 
     @abstractmethod
-    def execute(self, vector: str, seed: str) -> SecurityTestResult:
+    def execute(self, operation: str, seed: str) -> OperationResult:
         ...

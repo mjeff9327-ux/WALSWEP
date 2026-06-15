@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from typing import Optional
 
 
 @dataclass
@@ -16,6 +17,11 @@ class UnsignedTx:
     token: str
     chain: str
     seed_label: str = ""
+    from_address: str = ""
+    nonce: int = 0
+    gas_price: int = 0
+    gas_limit: int = 21000
+    utxos: list[dict] = None
 
 
 @dataclass
@@ -23,6 +29,8 @@ class SignedTx:
     raw: str
     tx_id: str
     chain: str
+    broadcasted: bool = False
+    broadcast_error: Optional[str] = None
 
 
 class IKeyStore(ABC):
@@ -32,5 +40,5 @@ class IKeyStore(ABC):
         ...
 
     @abstractmethod
-    def sign_transaction(self, unsigned_tx: UnsignedTx) -> SignedTx:
+    async def sign_transaction(self, unsigned_tx: UnsignedTx) -> SignedTx:
         ...

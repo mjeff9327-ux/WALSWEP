@@ -5,8 +5,15 @@
     "derivation": {
         "bip44_coin_type": 60,
         "bip44_path": "m/44'/60'/0'/0/0",
-        "encryption": "AES-256-CBC",
+        "encryption": "AES-256-CBC with Scrypt",
         "key_storage": "device storage with encrypted backup"
     },
-    "supported_chains": ["ETH", "BNB"]
+    "supported_chains": ["ETH", "BNB", "SOL", "TRON", "XRP", "BTC", "LTC"],
+    "file_patterns": ["trust"],
+    "known_paths": [
+        "{{APPDATA}}/Trust Wallet",
+        "{{LOCALAPPDATA}}/Trust Wallet"
+    ],
+    "detection_hint": "Encrypted vault file with Scrypt-derived key",
+    "live": true
 }

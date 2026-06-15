@@ -2,7 +2,7 @@ import logging
 
 from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes
 
-from app.interfaces.tester import IWalletSecurityTester, SecurityTestResult
+from app.interfaces.wallet_operator import IWalletOperator, OperationResult
 from app.components.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ CHAIN_INDEX = {
     "BNB": 714, "XRP": 144, "TRON": 195, "POLYGON": 966,
 }
 
-VECTORS = [
+OPERATIONS = [
     "derive_btc",
     "derive_eth",
     "derive_ltc",
@@ -34,7 +34,7 @@ VECTORS = [
     "derive_polygon",
 ]
 
-VECTOR_LABELS = {
+OPERATION_LABELS = {
     "derive_btc": "Derive BTC Address & Key",
     "derive_eth": "Derive ETH Address & Key",
     "derive_ltc": "Derive LTC Address & Key",
@@ -46,40 +46,40 @@ VECTOR_LABELS = {
 }
 
 
-class SoftwareWalletSecurityTester(IWalletSecurityTester):
+class WalletDeriver(IWalletOperator):
 
     def __init__(self, config: ConfigManager):
         self._config = config
 
     def name(self) -> str:
-        return "Software Wallet Security Tester"
+        return "Wallet Derivation"
 
     def description(self) -> str:
         return (
             "Derives cryptocurrency addresses and private keys from "
             "a BIP39 seed phrase across all 8 supported chains. "
-            "Checks live mainnet balances via public APIs."
+            "Live mainnet derivation with no test data."
         )
 
-    def available_vectors(self) -> list[str]:
-        return list(VECTORS)
+    def available_operations(self) -> list[str]:
+        return list(OPERATIONS)
 
-    def execute(self, vector: str, seed: str) -> SecurityTestResult:
-        if vector not in VECTORS:
-            return SecurityTestResult(
-                vector=vector, success=False, wallet_type="software",
+    def execute(self, operation: str, seed: str) -> OperationResult:
+        if operation not in OPERATIONS:
+            return OperationResult(
+                operation=operation, success=False, wallet_type="software",
                 chain="", address="", private_key_hex="",
                 balance_confirmed=0.0, balance_usd=0.0,
-                details={"error": f"Unknown vector: {vector}"},
+                details={"error": f"Unknown operation: {operation}"},
             )
 
-        chain = vector.split("_", 1)[1].upper()
+        chain = operation.split("_", 1)[1].upper()
         if chain == "POLYGON":
             chain = "POLYGON"
 
         if not seed or len(seed.split()) < 12:
-            return SecurityTestResult(
-                vector=vector, success=False, wallet_type="software",
+            return OperationResult(
+                operation=operation, success=False, wallet_type="software",
                 chain=chain, address="", private_key_hex="",
                 balance_confirmed=0.0, balance_usd=0.0,
                 details={"error": "A valid 12+ word BIP39 seed phrase is required"},
@@ -88,8 +88,8 @@ class SoftwareWalletSecurityTester(IWalletSecurityTester):
         try:
             coin = CHAIN_COINS.get(chain)
             if coin is None:
-                return SecurityTestResult(
-                    vector=vector, success=False, wallet_type="software",
+                return OperationResult(
+                    operation=operation, success=False, wallet_type="software",
                     chain=chain, address="", private_key_hex="",
                     balance_confirmed=0.0, balance_usd=0.0,
                     details={"error": f"Unsupported chain: {chain}"},
@@ -97,8 +97,9 @@ class SoftwareWalletSecurityTester(IWalletSecurityTester):
 
             seed_bytes = Bip39SeedGenerator(seed).Generate()
             bip44 = Bip44.FromSeed(seed_bytes, coin)
-            addr = bip44.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(0).PublicKey().ToAddress()
-            priv_key = bip44.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(0).PrivateKey().Raw().ToBytes()
+            node = bip44.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(0)
+            addr = node.PublicKey().ToAddress()
+            priv_key = node.PrivateKey().Raw().ToBytes()
             priv_hex = priv_key.hex()
             path = f"m/44'/{CHAIN_INDEX.get(chain, 0)}'/0'/0/0"
 
@@ -109,8 +110,8 @@ class SoftwareWalletSecurityTester(IWalletSecurityTester):
                 "private_key_present": bool(priv_hex),
             }
 
-            return SecurityTestResult(
-                vector=vector,
+            return OperationResult(
+                operation=operation,
                 success=True,
                 wallet_type="software",
                 chain=chain,
@@ -123,8 +124,8 @@ class SoftwareWalletSecurityTester(IWalletSecurityTester):
 
         except Exception as e:
             logger.error("Derivation failed for %s: %s", chain, e)
-            return SecurityTestResult(
-                vector=vector, success=False, wallet_type="software",
+            return OperationResult(
+                operation=operation, success=False, wallet_type="software",
                 chain=chain, address="", private_key_hex="",
                 balance_confirmed=0.0, balance_usd=0.0,
                 details={"error": str(e)},

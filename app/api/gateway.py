@@ -3,7 +3,9 @@ import logging
 import uuid
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+import asyncio
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from app.components.scan_engine import ScanEngine
@@ -58,18 +60,25 @@ async def create_app(
     @app.post("/api/v1/scan")
     async def enqueue_scan(req: ScanRequest):
         job_id = f"job_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-        jobs[job_id] = {"status": "running", "seeds": req.seeds, "scanned": 0, "found": 0}
+        jobs[job_id] = {"status": "queued", "seeds": req.seeds, "scanned": 0, "found": 0}
         if req.chains:
             scan_engine.set_chains(req.chains)
-        count = 0
-        found = 0
-        for seed in req.seeds:
-            result = await scan_engine.scan_single(seed)
-            count += 1
-            if result.found:
-                found += 1
-        jobs[job_id] = {"status": "completed", "scanned": count, "found": found}
-        return {"job_id": job_id, "scanned": count, "found": found}
+
+        async def _run_scan():
+            jobs[job_id]["status"] = "running"
+            count = 0
+            found = 0
+            for seed in req.seeds:
+                result = await scan_engine.scan_single(seed)
+                count += 1
+                if result.found:
+                    found += 1
+                jobs[job_id]["scanned"] = count
+                jobs[job_id]["found"] = found
+            jobs[job_id]["status"] = "completed"
+
+        asyncio.create_task(_run_scan())
+        return {"job_id": job_id, "status": "queued"}
 
     @app.get("/api/v1/jobs/{job_id}")
     async def get_job(job_id: str):

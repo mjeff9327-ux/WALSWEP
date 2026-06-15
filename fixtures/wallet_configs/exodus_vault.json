@@ -8,5 +8,12 @@
         "encryption": "ChaCha20-Poly1305",
         "key_storage": "local state file (encrypted)"
     },
-    "supported_chains": ["BTC", "ETH", "SOL", "XRP"]
+    "supported_chains": ["BTC", "ETH", "SOL", "XRP", "ADA", "DOT"],
+    "file_patterns": ["exodus"],
+    "known_paths": [
+        "{{APPDATA}}/Exodus/exodus.wallet",
+        "{{APPDATA}}/Exodus"
+    ],
+    "detection_hint": "ChaCha20-Poly1305 encrypted wallet file in appdata",
+    "live": true
 }

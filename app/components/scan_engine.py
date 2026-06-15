@@ -5,10 +5,11 @@ from typing import Optional
 
 from app.interfaces.solver import ISolver
 from app.interfaces.key_store import IKeyStore
-from app.interfaces.node_client import INodeClient
+from app.interfaces.node_client import INodeClient, Balance
 from app.interfaces.webhook_client import IWebhookClient, EventResult
 from app.components.event_bus import EventBus
 from app.components.config_manager import ConfigManager
+from app.components.token_scanner import TokenScanner
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class ScanEngine:
         webhook_client: IWebhookClient,
         event_bus: EventBus,
         config: Optional[ConfigManager] = None,
+        token_scanner: Optional[TokenScanner] = None,
         chains: list[str] | None = None,
     ):
         self._solver = solver
@@ -38,6 +40,7 @@ class ScanEngine:
         self._webhook_client = webhook_client
         self._event_bus = event_bus
         self._config = config
+        self._token_scanner = token_scanner
         self._chains = chains or ["BTC", "ETH", "LTC", "SOL"]
         self._running = False
         self._stats = {"scanned": 0, "found": 0, "started_at": None}
@@ -66,23 +69,32 @@ class ScanEngine:
         if self._config:
             scan_token = self._config.get("scan", "check_erc20_tokens", False)
 
-        for addr_info in derived.addresses:
-            chain = addr_info["chain"]
-            if chain not in self._chains:
-                continue
-            address = addr_info["address"]
-            if not address:
-                continue
-            balance = await self._node_client.query_balance(address, chain)
-            balances.append({"chain": chain, "address": address, "balance": balance})
-            if balance.confirmed > 0:
-                found_any = True
-
-            if scan_token and chain == "ETH" and balance.confirmed > 0:
-                usdt_bal = await self._node_client.query_balance(address, "USDT_ERC20")
-                if usdt_bal.confirmed > 0:
-                    balances.append({"chain": "USDT_ERC20", "address": address, "balance": usdt_bal})
+        chain_addrs = [(a["chain"], a["address"]) for a in derived.addresses
+                       if a["chain"] in self._chains and a["address"]]
+        if chain_addrs:
+            tasks = [self._node_client.query_balance(addr, c) for c, addr in chain_addrs]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for (chain, address), res in zip(chain_addrs, results):
+                if isinstance(res, Exception):
+                    balance = Balance(token=chain, confirmed=0.0, pending=0.0)
+                else:
+                    balance = res
+                balances.append({"chain": chain, "address": address, "balance": balance})
+                if balance.confirmed > 0:
                     found_any = True
+
+                if scan_token and self._token_scanner and balance.confirmed > 0:
+                    token_balances = await self._token_scanner.scan(address, chain)
+                    for tb in token_balances:
+                        if tb.get("balance", 0) > 0:
+                            synthetic = Balance(
+                                token=f"{tb['symbol']}_{chain}",
+                                confirmed=tb["balance"],
+                                pending=0.0,
+                                usd_value=tb.get("usd_value", 0),
+                            )
+                            balances.append({"chain": f"{tb['symbol']}_{chain}", "address": address, "balance": synthetic})
+                            found_any = True
 
         result = ScanResult(
             pattern=pattern,

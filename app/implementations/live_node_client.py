@@ -1,3 +1,4 @@
+import asyncio
 import time
 import logging
 
@@ -15,12 +16,13 @@ TRC20_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 
 
 class LiveNodeClient(INodeClient):
-    def __init__(self, timeout: float = 15.0):
+    def __init__(self, api_keys: dict | None = None, timeout: float = 15.0):
         self._client = httpx.AsyncClient(timeout=timeout)
         self._cache: dict[str, tuple[Balance, float]] = {}
         self._cache_ttl = 30.0
         self._price_cache: dict[str, tuple[float, float]] = {}
         self._subscriptions: list[EventStream] = []
+        self._api_keys = api_keys or {}
 
     async def _get_usd_price(self, token: str) -> float:
         now = time.time()
@@ -67,9 +69,12 @@ class LiveNodeClient(INodeClient):
 
     async def _check_eth(self, address: str) -> tuple[float, float, float]:
         try:
+            params = {"module": "account", "action": "balance", "address": address, "tag": "latest"}
+            if self._api_keys.get("etherscan"):
+                params["apikey"] = self._api_keys["etherscan"]
             resp = await self._client.get(
                 "https://api.etherscan.io/api",
-                params={"module": "account", "action": "balance", "address": address, "tag": "latest"},
+                params=params,
             )
             data = resp.json()
             if data.get("status") == "1":
@@ -111,9 +116,12 @@ class LiveNodeClient(INodeClient):
 
     async def _check_bnb(self, address: str) -> tuple[float, float, float]:
         try:
+            params = {"module": "account", "action": "balance", "address": address, "tag": "latest"}
+            if self._api_keys.get("bscscan"):
+                params["apikey"] = self._api_keys["bscscan"]
             resp = await self._client.get(
                 "https://api.bscscan.com/api",
-                params={"module": "account", "action": "balance", "address": address, "tag": "latest"},
+                params=params,
             )
             data = resp.json()
             if data.get("status") == "1":
@@ -153,9 +161,12 @@ class LiveNodeClient(INodeClient):
 
     async def _check_polygon(self, address: str) -> tuple[float, float, float]:
         try:
+            params = {"module": "account", "action": "balance", "address": address, "tag": "latest"}
+            if self._api_keys.get("polygonscan"):
+                params["apikey"] = self._api_keys["polygonscan"]
             resp = await self._client.get(
                 "https://api.polygonscan.com/api",
-                params={"module": "account", "action": "balance", "address": address, "tag": "latest"},
+                params=params,
             )
             data = resp.json()
             if data.get("status") == "1":
@@ -170,12 +181,15 @@ class LiveNodeClient(INodeClient):
 
     async def _check_erc20_usdt(self, address: str) -> tuple[float, float, float]:
         try:
+            params = {
+                "module": "account", "action": "tokenbalance",
+                "contractaddress": ERC20_USDT, "address": address, "tag": "latest",
+            }
+            if self._api_keys.get("etherscan"):
+                params["apikey"] = self._api_keys["etherscan"]
             resp = await self._client.get(
                 "https://api.etherscan.io/api",
-                params={
-                    "module": "account", "action": "tokenbalance",
-                    "contractaddress": ERC20_USDT, "address": address, "tag": "latest",
-                },
+                params=params,
             )
             data = resp.json()
             if data.get("status") == "1":
@@ -246,6 +260,137 @@ class LiveNodeClient(INodeClient):
         balance = Balance(token=token, confirmed=confirmed, pending=pending, usd_value=usd)
         self._cache[cache_key] = (balance, now)
         return balance
+
+    async def query_balances(self, address: str, chains: list[str]) -> dict[str, Balance]:
+        method_map = {
+            "BTC": self._check_btc,
+            "ETH": self._check_eth,
+            "LTC": self._check_ltc,
+            "SOL": self._check_sol,
+            "BNB": self._check_bnb,
+            "XRP": self._check_xrp,
+            "TRON": self._check_tron,
+            "POLYGON": self._check_polygon,
+            "USDT_ERC20": self._check_erc20_usdt,
+            "USDT_TRC20": self._check_trc20_usdt,
+        }
+
+        async def _check_one(chain: str) -> tuple[str, Balance]:
+            cache_key = f"{chain}:{address}"
+            now = time.time()
+            if cache_key in self._cache:
+                bal, ts = self._cache[cache_key]
+                if now - ts < self._cache_ttl:
+                    return chain, bal
+
+            checker = method_map.get(chain)
+            if checker is None:
+                return chain, Balance(token=chain, confirmed=0.0, pending=0.0)
+
+            confirmed, pending, usd = await checker(address)
+            if confirmed > 0 or pending > 0:
+                confirmed = round(confirmed, 8)
+                pending = round(pending, 8)
+                usd = round(usd, 2)
+
+            balance = Balance(token=chain, confirmed=confirmed, pending=pending, usd_value=usd)
+            self._cache[cache_key] = (balance, now)
+            return chain, balance
+
+        results = await asyncio.gather(*[_check_one(c) for c in chains], return_exceptions=True)
+        out = {}
+        for r in results:
+            if isinstance(r, Exception):
+                continue
+            chain, bal = r
+            out[chain] = bal
+        return out
+
+    async def query_balances_batch(self, chain: str, addresses: list[str]) -> dict[str, Balance]:
+        if not addresses:
+            return {}
+
+        if chain in ("ETH",) and self._api_keys.get("etherscan"):
+            return await self._batch_etherscan("etherscan", addresses, "ETH")
+        if chain in ("BNB",) and self._api_keys.get("bscscan"):
+            return await self._batch_etherscan("bscscan", addresses, "BNB")
+        if chain in ("POLYGON",) and self._api_keys.get("polygonscan"):
+            return await self._batch_etherscan("polygonscan", addresses, "POLYGON")
+        if chain == "SOL":
+            return await self._batch_solana(addresses)
+
+        results = {}
+        tasks = {a: self.query_balance(a, chain) for a in addresses}
+        gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        for addr, res in zip(tasks.keys(), gathered):
+            if isinstance(res, Exception):
+                results[addr] = Balance(token=chain, confirmed=0.0, pending=0.0)
+            else:
+                results[addr] = res
+        return results
+
+    async def _batch_etherscan(self, api_key_name: str, addresses: list[str], chain: str) -> dict[str, Balance]:
+        base_urls = {
+            "etherscan": "https://api.etherscan.io/api",
+            "bscscan": "https://api.bscscan.com/api",
+            "polygonscan": "https://api.polygonscan.com/api",
+        }
+        url = base_urls.get(api_key_name)
+        if not url:
+            return {}
+
+        results = {}
+        for i in range(0, len(addresses), 20):
+            batch = addresses[i:i + 20]
+            params = {
+                "module": "account", "action": "balancemulti",
+                "address": ",".join(batch), "tag": "latest",
+            }
+            if self._api_keys.get(api_key_name):
+                params["apikey"] = self._api_keys[api_key_name]
+            try:
+                resp = await self._client.get(url, params=params)
+                data = resp.json()
+                if data.get("status") == "1":
+                    for entry in data.get("result", []):
+                        addr = entry.get("account", "")
+                        bal = int(entry.get("balance", 0)) / 1e18
+                        usd = bal * await self._get_usd_price(chain)
+                        results[addr] = Balance(token=chain, confirmed=round(bal, 8), pending=0.0, usd_value=round(usd, 2))
+                else:
+                    for addr in batch:
+                        bal = await self.query_balance(addr, chain)
+                        results[addr] = bal
+            except Exception:
+                for addr in batch:
+                    bal = await self.query_balance(addr, chain)
+                    results[addr] = bal
+        return results
+
+    async def _batch_solana(self, addresses: list[str]) -> dict[str, Balance]:
+        results = {}
+        for i in range(0, len(addresses), 100):
+            batch = addresses[i:i + 100]
+            try:
+                resp = await self._client.post(
+                    SOL_RPC,
+                    json={"jsonrpc": "2.0", "id": 1, "method": "getMultipleAccounts", "params": [batch]},
+                )
+                data = resp.json()
+                account_infos = data.get("result", {}).get("value", [])
+                for addr, info in zip(batch, account_infos):
+                    if info is not None:
+                        lamports = info.get("lamports", 0)
+                        bal = lamports / 1e9
+                        usd = bal * await self._get_usd_price("SOL")
+                        results[addr] = Balance(token="SOL", confirmed=round(bal, 8), pending=0.0, usd_value=round(usd, 2))
+                    else:
+                        results[addr] = Balance(token="SOL", confirmed=0.0, pending=0.0)
+            except Exception:
+                for addr in batch:
+                    bal = await self.query_balance(addr, "SOL")
+                    results[addr] = bal
+        return results
 
     async def subscribe_mempool(self, filter_data: EventStream) -> None:
         self._subscriptions.append(filter_data)

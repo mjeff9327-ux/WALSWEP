@@ -2,11 +2,14 @@ import asyncio
 import ctypes
 import io
 import json
+import logging
 import os
 import sys
 import threading
 import time
 from collections import deque
+
+logger = logging.getLogger(__name__)
 
 from rich.panel import Panel
 from rich.text import Text

@@ -8,5 +8,12 @@
         "encryption": "AES-256-GCM with Argon2id",
         "key_storage": "browser localStorage (encrypted keypair)"
     },
-    "supported_chains": ["SOL"]
+    "supported_chains": ["SOL"],
+    "file_patterns": ["phantom"],
+    "known_paths": [
+        "{{LOCALAPPDATA}}/Google/Chrome/User Data/Default/Local Extension Storage/bfnaelmomeimhlpmgjnjophhpkkoljpa",
+        "{{APPDATA}}/Mozilla/Firefox/Profiles/*.default/storage/default/moz-extension+++/idb"
+    ],
+    "detection_hint": "Encrypted Solana keypair with AES-256-GCM",
+    "live": true
 }

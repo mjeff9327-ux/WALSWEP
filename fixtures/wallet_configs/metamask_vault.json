@@ -8,5 +8,15 @@
         "encryption": "AES-128-CBC with PBKDF2",
         "key_storage": "browser localStorage (encrypted vault)"
     },
-    "supported_chains": ["ETH", "BNB", "POLYGON"]
+    "supported_chains": ["ETH", "BNB", "POLYGON", "AVAX", "OP"],
+    "file_patterns": ["vault", "metamask"],
+    "known_paths": [
+        "{{LOCALAPPDATA}}/Google/Chrome/User Data/Default/Local Storage/leveldb",
+        "{{LOCALAPPDATA}}/Google/Chrome/User Data/Profile 1/Local Storage/leveldb",
+        "{{APPDATA}}/Mozilla/Firefox/Profiles",
+        "{{LOCALAPPDATA}}/Microsoft/Edge/User Data/Default/Local Storage/leveldb",
+        "{{APPDATA}}/Opera Software/Opera Stable/Local Storage/leveldb"
+    ],
+    "detection_hint": "Encrypted JSON vault blob in browser localstorage leveldb files",
+    "live": true
 }

