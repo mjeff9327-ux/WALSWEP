@@ -12,6 +12,9 @@ OPERATION_BUTTONS = [
     ("crack_vaults", "magenta", "Crack Encrypted Vaults"),
     ("scan_mpc_shares", "cyan", "Scan for MPC Share Files"),
     ("detect_hw_wallet", "blue", "Detect Hardware Wallet"),
+    ("scan_multisig", "cyan", "Scan Safe/Multi-sig Wallets"),
+    ("scan_social", "green", "Scan Argent/Social Wallets"),
+    ("scan_tss", "yellow", "Scan TSS Wallets"),
     ("threshold_mpc", "blue", "MPC Threshold Signing"),
     ("sweep_btc", "yellow", "Sweep — BTC"),
     ("sweep_eth", "yellow", "Sweep — ETH"),
@@ -123,6 +126,13 @@ class LabPanel(Screen):
                                 note = w.get("status", "")
                                 if note:
                                     output.write(f"  [dim]{label[:60]} — {note}[/]")
+                    elif key == "funded_wallets" and isinstance(value, list):
+                        output.write(f"\n[bold]Funded Smart Contract Wallets:[/]")
+                        for w in value:
+                            note = w.get("note", w.get("version", ""))
+                            addr = w.get("address", "")[:16]
+                            bal = w.get("balance", w.get("usd", 0))
+                            output.write(f"  [green]{w.get('chain','?')} {addr}...[/] — ${bal:.2f} ({note})")
                     elif key == "funded_chains" and isinstance(value, list):
                         output.write(f"\n[bold]Funded Chains:[/]")
                         for f in value:

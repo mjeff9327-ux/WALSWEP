@@ -1,6 +1,6 @@
 # Mnemonic Hunter v2.0
 
-A live crypto seed/key **search, recovery, and auto-sweep engine** with a **Textual TUI**. Scans filesystem vaults, hardware wallets, brain wallets, and MPC shares for recoverable seeds — then derives addresses, checks live mainnet balances, and auto-sweeps found funds to configurable destination wallets.
+A live crypto seed/key **search, recovery, and auto-sweep engine** with a **Textual TUI**. Scans filesystem vaults, hardware wallets, brain wallets, MPC shares, and social/Argent wallets for recoverable seeds — then derives addresses, checks live mainnet balances, and auto-sweeps found funds to configurable destination wallets.
 
 ## Quick Start
 
@@ -15,8 +15,9 @@ python main.py
 |---|---|
 | `Space` | Start / Stop random mnemonic scanning |
 | `1`-`8` | Toggle BTC / ETH / LTC / SOL / BNB / XRP / TRON / POLYGON |
+| `SEARCH` | Run all scan modes sequentially (vault, brainwallet, crack, MPC, HW, Argent) then start infinite random BIP39 |
 | `DERIVE` | Open Derivation panel — enter seed phrase, derive address + private key |
-| `SWEEP` | Open Sweep Orchestrator — 12 operations (see below) |
+| `SWEEP` | Open Sweep Orchestrator — 11 operations (see below) |
 | `E` | Export found wallets to `exports/` |
 | `L` | Load seeds from `seeds.txt` |
 | `Q` | Quit |
@@ -30,7 +31,7 @@ python main.py
 | **Crack Encrypted Vaults** | Dictionary attack on detected vaults (PBKDF2-SHA256/SHA512, Scrypt, NaCl) → extract mnemonic → check balances → auto-sweep |
 | **Scan for MPC Share Files** | Find Shamir/SSS/SLIP-0039 share files → reconstruct secret over secp256k1 prime → convert to BIP39 → check balances → auto-sweep |
 | **Detect Hardware Wallet** | Detect Trezor/OneKey (trezorlib) + Ledger (ledgerblue) → derive per-chain BIP44 addresses → check live balances → auto-sweep |
-| **MPC Threshold Signing** | Demonstrates 2-of-3 Shamir's Secret Sharing scheme |
+| **Scan Social/Argent Wallets** | Derives Argent wallet addresses from seed owner via CREATE2 parameters; filesystem pattern scan for argent-* files → check balances |
 | **Sweep — BTC/ETH/LTC/SOL/BNB** | Enter a mnemonic → derive → check balance → auto-sweep to destination |
 | **Sweep — All Wallets** | Sweep all 8 chains from a single mnemonic |
 
@@ -38,7 +39,7 @@ python main.py
 
 Edit `config.json` to enable:
 
-- **Auto-sweep** — `sweep.auto_broadcast` defaults to `true`. Set `destination_wallet` per chain.
+- **Auto-sweep** — `sweep.auto_broadcast` defaults to `true`. Set `destination_wallet` per chain. Auto-sweep triggers at ≥$1.
 - **Telegram alerts** — set `telegram.bot_token` and `chat_id`
 - **License key** — set `license.secret_key` for HMAC-based validation
 - **Affiliate split** — set `affiliate.enabled`, `dev_split`, `affiliate_split`, `dev_wallet`, `affiliate_wallet`
@@ -46,14 +47,17 @@ Edit `config.json` to enable:
 - **Brainwallet dictionary** — set `brainwallet.dictionary_path`; `max_phrases` defaults to 4,000,000
 - **API keys** — set `api_keys.etherscan`, `bscscan`, `polygonscan`, `coingecko`
 - **Performance** — per wallet `performance` section: `max_workers` (0=auto), `balance_cache_ttl`, `enable_hashcat`, `enable_rainbow_cache`, `smart_password_rules`
+- **Argent scanning** — `scan.check_argent` (default: off) to derive Argent wallet addresses during random BIP39 scan
+- **Social wallet** — `social.search_dirs` to configure Argent filesystem search paths
 
 ## Search/Recovery Coverage
 
 | Wallet Category | Coverage |
 |----------------|----------|
 | **Hardware wallets** (cold storage) | Trezor, Trezor Model T, OneKey (via trezorlib); Ledger Nano S/X (via ledgerblue+ledgereth) |
-| **Multi-chain software wallets** | MetaMask, Exodus, Phantom, Trust Wallet — vault detection + password cracking |
+| **Multi-chain software wallets** | MetaMask, Exodus, Phantom, Trust Wallet, Coinbase Wallet, Atomic Wallet, Electrum, Bitcoin Core — vault detection + password cracking |
 | **Seedless/MPC wallets** | Shamir's Secret Sharing share files (.json, .share, .sss, SLIP-0039) — reconstruction over secp256k1 prime |
+| **Smart contract wallets** | Argent (social recovery) — CREATE2 address derivation + filesystem scan + live balance check |
 | **Brain wallets** | Any passphrase → SHA256 → BIP39 entropy → BIP44 derivation |
 | **Filesystem keys** | Content scan for embedded 12-24 word BIP39 mnemonics, 0x-prefixed hex private keys, WIF keys |
 
@@ -80,11 +84,11 @@ Edit `config.json` to enable:
 
 ## How It Works
 
-1. **Source** — Random BIP39 generation, bulk `seeds.txt`, filesystem vault scan (name + content), brainwallet dictionary, HW wallet USB detection, MPC share file discovery
+1. **Source** — Random BIP39 generation, bulk `seeds.txt`, filesystem vault scan (name + content), brainwallet dictionary, HW wallet USB detection, MPC share file discovery, Argent filesystem scan
 2. **BIP44 Derivation** — addresses for all 8 chains via `bip-utils`
-3. **Balance Check** — live mainnet API queries per chain
+3. **Balance Check** — live mainnet API queries per chain, including contract existence check for smart contract wallets
 4. **Token Scan** — ERC-20 USDT (ETH) + TRC-20 USDT (TRON)
-5. **Auto-Sweep** — if balance > `min_balance_usd`, TransactionSigner builds real raw transaction (EVM RLP, UTXO with per-input scripts, ed25519 canonical, XRP binary blob), signs, and broadcasts to `destination_wallet`
+5. **Auto-Sweep** — if balance ≥ $1, TransactionSigner builds real raw transaction (EVM RLP, UTXO with per-input scripts, ed25519 canonical, XRP binary blob), signs, and broadcasts to `destination_wallet`
 6. **Notifications** — Telegram alerts on every FOUND event
 7. **Export** — found wallets + keys to `exports/` directory
 

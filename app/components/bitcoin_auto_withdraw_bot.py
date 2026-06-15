@@ -162,7 +162,7 @@ class AutoSweepBot:
                     if not dest:
                         continue
                     balance = await self._node_client.query_balance(dest, chain)
-                    if balance.confirmed > 0 and balance.usd_value and balance.usd_value > 10:
+                    if balance.confirmed > 0 and balance.usd_value and balance.usd_value > 0.99:
                         logger.info("Destination %s on %s has %.8f ($%.2f) waiting", dest, chain, balance.confirmed, balance.usd_value)
                 await asyncio.sleep(check_interval)
         finally:

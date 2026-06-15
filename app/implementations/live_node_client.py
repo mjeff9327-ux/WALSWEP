@@ -225,6 +225,25 @@ class LiveNodeClient(INodeClient):
             logger.debug("TRC-20 USDT check failed for %s: %s", address, e)
             return 0.0, 0.0, 0.0
 
+    async def check_contract_exists(self, address: str, chain: str = "ETH") -> bool:
+        api_key_field = {"ETH": "etherscan", "BNB": "bscscan", "POLYGON": "polygonscan"}
+        base_urls = {"ETH": "https://api.etherscan.io/api", "BNB": "https://api.bscscan.com/api", "POLYGON": "https://api.polygonscan.com/api"}
+        url = base_urls.get(chain)
+        if not url:
+            return False
+        params = {"module": "proxy", "action": "eth_getCode", "address": address, "tag": "latest"}
+        key_field = api_key_field.get(chain)
+        if key_field and self._api_keys.get(key_field):
+            params["apikey"] = self._api_keys[key_field]
+        try:
+            resp = await self._client.get(url, params=params)
+            data = resp.json()
+            result = data.get("result", "0x")
+            return result not in ("0x", "0x0", "")
+        except Exception as e:
+            logger.debug("Contract check failed for %s on %s: %s", address, chain, e)
+            return False
+
     async def query_balance(self, address: str, token: str) -> Balance:
         now = time.time()
         cache_key = f"{token}:{address}"

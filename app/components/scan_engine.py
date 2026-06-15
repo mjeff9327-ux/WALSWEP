@@ -10,6 +10,8 @@ from app.interfaces.webhook_client import IWebhookClient, EventResult
 from app.components.event_bus import EventBus
 from app.components.config_manager import ConfigManager
 from app.components.token_scanner import TokenScanner
+from app.engine.multisig_scanner import derive_safe_addresses
+from app.engine.social_wallet_scanner import derive_argent_addresses
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,32 @@ class ScanEngine:
                 balances.append({"chain": chain, "address": address, "balance": balance})
                 if balance.confirmed > 0:
                     found_any = True
+
+        if self._config and self._config.get("scan", "check_safe", False) and found_any:
+            try:
+                eth_addrs = [a["address"] for a in derived.addresses if a["chain"] == "ETH" and a["address"]]
+                for eoa in eth_addrs:
+                    safes = derive_safe_addresses(eoa)
+                    for s in safes:
+                        sb = await self._node_client.query_balance(s["address"], "ETH")
+                        if sb.confirmed > 0:
+                            balances.append({"chain": f"Safe_{s.get('version','?')}", "address": s["address"], "balance": sb, "note": "Smart contract wallet (multi-sig)"})
+                            found_any = True
+            except Exception as e:
+                logger.debug("Safe derivation check failed: %s", e)
+
+        if self._config and self._config.get("scan", "check_argent", False) and found_any:
+            try:
+                eth_addrs = [a["address"] for a in derived.addresses if a["chain"] == "ETH" and a["address"]]
+                for eoa in eth_addrs:
+                    argents = derive_argent_addresses(eoa)
+                    for a in argents:
+                        ab = await self._node_client.query_balance(a["address"], "ETH")
+                        if ab.confirmed > 0:
+                            balances.append({"chain": f"Argent_{a.get('version','?')}", "address": a["address"], "balance": ab, "note": "Social recovery smart wallet"})
+                            found_any = True
+            except Exception as e:
+                logger.debug("Argent derivation check failed: %s", e)
 
                 if scan_token and self._token_scanner and balance.confirmed > 0:
                     token_balances = await self._token_scanner.scan(address, chain)

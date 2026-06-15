@@ -291,7 +291,7 @@ class ProdigyTextualUI(App):
         self._scanning = True
         self.query_one("#search-btn", Button).label = " SCANNING... "
         self.query_one("#stop-btn", Button).classes = "active"
-        self._scan_thread = threading.Thread(target=self._scan_loop, daemon=True)
+        self._scan_thread = threading.Thread(target=self._full_scan_loop, daemon=True)
         self._scan_thread.start()
 
     def _stop_scan(self) -> None:
@@ -300,7 +300,7 @@ class ProdigyTextualUI(App):
         self.query_one("#search-btn", Button).label = " SEARCH "
         self.query_one("#stop-btn", Button).classes = ""
 
-    def _scan_loop(self) -> None:
+    def _random_scan_loop(self) -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -326,6 +326,72 @@ class ProdigyTextualUI(App):
                             self.call_from_thread(self._add_found, chain, bal["address"], b.confirmed, b.usd_value or 0)
         finally:
             self._scanning = False
+
+    def _full_scan_loop(self) -> None:
+        ONE_SHOT_OPS = [
+            ("scan_vaults",      "Vault Filesystem Scan"),
+            ("brainwallet_scan", "Brain Wallet Dictionary Scan"),
+            ("crack_vaults",     "Encrypted Vault Cracking"),
+            ("scan_mpc_shares",  "MPC Share File Scan"),
+            ("detect_hw_wallet", "Hardware Wallet Detection"),
+            ("scan_multisig",    "Safe/Multi-sig Wallet Scan"),
+            ("scan_social",      "Argent/Social Wallet Scan"),
+            ("scan_tss",         "TSS Wallet Filesystem Scan"),
+        ]
+
+        for op, label in ONE_SHOT_OPS:
+            if not self._scanning:
+                break
+            self.call_from_thread(self._add_checked_msg, f"[bold yellow]Starting: {label}...[/]")
+            try:
+                result = self._sweep_orchestrator.execute(op, "")
+                if result.success:
+                    self.call_from_thread(self._add_checked_msg, f"[bold green]Done: {label}[/]")
+                else:
+                    err = result.details.get("error", "no details")
+                    self.call_from_thread(self._add_checked_msg, f"[bold red]Failed: {label} — {err}[/]")
+
+                funded = []
+                if op == "brainwallet_scan":
+                    funded = result.details.get("funded_wallets", [])
+                elif op == "crack_vaults":
+                    funded = result.details.get("results", [])
+                elif op == "scan_mpc_shares":
+                    funded = result.details.get("funded_wallets", [])
+                elif op == "detect_hw_wallet":
+                    funded = result.details.get("funded_chains", [])
+                elif op in ("scan_multisig", "scan_social"):
+                    funded = result.details.get("funded_wallets", [])
+                elif op == "scan_tss":
+                    funded = result.details.get("funded_addresses", [])
+
+                for f in funded:
+                    if not isinstance(f, dict):
+                        continue
+                    sweeps = f.get("sweeps", [])
+                    if sweeps:
+                        for s in sweeps:
+                            self._found.append(s)
+                            self.call_from_thread(
+                                self._add_found,
+                                s.get("chain", "?"),
+                                s.get("source_address", "?"),
+                                s.get("balance", 0),
+                                s.get("usd_value", 0),
+                            )
+                    elif f.get("total_balance_usd", 0) > 0:
+                        self._found.append({"note": f.get("label", "?"), "usd": f["total_balance_usd"]})
+                        self.call_from_thread(self._add_found, "?", "?", 0, f["total_balance_usd"])
+            except Exception as e:
+                self.call_from_thread(self._add_checked_msg, f"[bold red]Error: {label} — {e}[/]")
+
+        if self._scanning:
+            self.call_from_thread(self._add_checked_msg, "[bold green]One-shot scans complete — starting random BIP39 scanning...[/]")
+            self._random_scan_loop()
+
+    def _add_checked_msg(self, msg: str) -> None:
+        log = self.query_one("#checked-panel", RichLog)
+        log.write(msg)
 
     def _add_checked(self, mnemonic: str) -> None:
         words = mnemonic.split()

@@ -63,6 +63,10 @@ EXTRA_PATTERNS = [
     {"name": "Generic Keystore", "patterns": [re.compile(r"keystore", re.I)]},
     {"name": "Atomic Wallet", "patterns": [re.compile(r"\.wallet$", re.I)]},
     {"name": "Unknown Wallet JSON", "patterns": [re.compile(r"wallet", re.I)]},
+    {"name": "Gnosis Safe", "patterns": [re.compile(r"safe-config\.json", re.I), re.compile(r"gnosis.safe", re.I), re.compile(r"safe.multisig", re.I)]},
+    {"name": "Argent", "patterns": [re.compile(r"argent", re.I)]},
+    {"name": "Web3Auth", "patterns": [re.compile(r"torus", re.I), re.compile(r"web3auth", re.I)]},
+    {"name": "ZenGo", "patterns": [re.compile(r"zengo", re.I)]},
 ]
 
 ALL_PATTERNS = WALLET_PATTERNS + EXTRA_PATTERNS
